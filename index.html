@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Order Execution Engine - Test Client</title>
+
+  <!-- Socket.IO client -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+  <style>
+    body {
+      font-family: Inter, Arial, sans-serif;
+      background: #121212;
+      color: #eaeaea;
+      padding: 40px;
+      max-width: 700px;
+      margin: auto;
+    }
+
+    h1 {
+      color: #4caf50;
+      font-size: 28px;
+      text-align: center;
+    }
+
+    .input-group {
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    input {
+      padding: 10px;
+      margin-top: 4px;
+      border: none;
+      border-radius: 6px;
+      background: #1e1e1e;
+      color: #fff;
+    }
+
+    button {
+      padding: 12px;
+      margin-top: 10px;
+      width: 100%;
+      background: #4caf50;
+      border: none;
+      color: #fff;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+
+    #statusBox {
+      margin-top: 25px;
+      padding: 15px;
+      background: #1e1e1e;
+      border-radius: 8px;
+      max-height: 500px;
+      overflow-y: auto;
+      border: 1px solid #333;
+    }
+
+    .status {
+      padding: 10px;
+      margin: 8px 0;
+      background: #222;
+      border-left: 4px solid #4caf50;
+      border-radius: 4px;
+    }
+
+    .status.failed {
+      border-left: 4px solid #e53935;
+    }
+
+    .status.submitted {
+      border-left: 4px solid #0288d1;
+    }
+
+    .status.routing {
+      border-left: 4px solid #ffa726;
+    }
+
+    .status.building {
+      border-left: 4px solid #ab47bc;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Order Execution Engine</h1>
+
+  <div class="input-group">
+    <label>Token In</label>
+    <input id="tokenIn" placeholder="e.g. SOL" />
+  </div>
+
+  <div class="input-group">
+    <label>Token Out</label>
+    <input id="tokenOut" placeholder="e.g. USDC" />
+  </div>
+
+  <div class="input-group">
+    <label>Amount In</label>
+    <input id="amountIn" type="number" placeholder="e.g. 1.2" />
+  </div>
+
+  <button onclick="submitOrder()">Submit Order</button>
+
+  <h3 style="margin-top: 30px;">Live Execution Updates</h3>
+  <div id="statusBox"></div>
+
+  <script>
+    const BACKEND_URL = "https://eterna-production-1c09.up.railway.app";
+    let socket;
+
+    function log(msg, statusType = "") {
+      const box = document.getElementById("statusBox");
+      const div = document.createElement("div");
+      div.className = "status " + statusType;
+      div.innerText = msg;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function submitOrder() {
+      const tokenIn = document.getElementById("tokenIn").value;
+      const tokenOut = document.getElementById("tokenOut").value;
+      const amountIn = Number(document.getElementById("amountIn").value);
+
+      if (!tokenIn || !tokenOut || !amountIn) {
+        return alert("Please fill all fields");
+      }
+
+      const body = { tokenIn, tokenOut, amountIn };
+
+      log("Submitting order...", "submitted");
+
+      const res = await fetch(`${BACKEND_URL}/api/orders/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      const orderId = data.orderId;
+      log(`Order Created → ${orderId}`);
+
+      // create socket connection
+      socket = io(BACKEND_URL, { transports: ["websocket"] });
+
+      socket.emit("subscribe", { orderId });
+
+      socket.on("status", (message) => {
+        log(
+          `[${message.status}]  ${message.details || ""}`,
+          message.status.toLowerCase()
+        );
+      });
+    }
+  </script>
+</body>
+</html>
